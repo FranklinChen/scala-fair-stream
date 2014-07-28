@@ -3,17 +3,15 @@ package com.franklinchen
 import org.specs2._
 
 class FairStreamSpec extends Specification { def is = s2"""
-  FairStream
-
-    Pythagorean triples $e1
+  Pythagorean triples $e1
   """
 
   def e1 = {
     val pythagoreanTriples = {
-      import FairStream.guard
+      import FairStream._
 
       lazy val number: FairStream[Int] =
-        FairStream(0) append (number flatMap { i => FairStream(i + 1) })
+        one(0) append (number flatMap { i => one(i+1) })
 
       for {
         i <- number
@@ -22,12 +20,12 @@ class FairStreamSpec extends Specification { def is = s2"""
 
       for {
         i <- number
-        _ <- guard(i > 0)
+        () <- guard(i > 0)
         j <- number
-        _ <- guard(j > 0)
+        () <- guard (j > 0)
         k <- number
-        _ <- guard(k > 0)
-        _ <- guard(i*i + j*j == k*k)
+        () <- guard(k > 0)
+        () <- guard(i*i + j*j == k*k)
       } yield (i, j, k)
     }
 

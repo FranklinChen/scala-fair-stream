@@ -11,47 +11,49 @@ package com.franklinchen
   Just enough has been provided to allow use of for-comprehensions.
   */
 abstract class FairStream[+A] {
-  @inline private def asFairStream[B](x: AnyRef): FairStream[B] =
-    x.asInstanceOf[FairStream[B]]
+  import FairStream._
 
   def append[B >: A](that: => FairStream[B]): FairStream[B] = this match {
-    case Nil => Incomplete(that)
-    case One(a) => Choice(a, that)
-    case c: Choice[A] => Choice(c.head, asFairStream[B](that append c.tail))
-    case i: Incomplete[A] => that match {
-      case Nil => that
-      case One(b) => Choice(b, i.unwrap)
-      case c: Choice[B] =>
-        Choice(c.head, asFairStream[B](i.unwrap append c.tail))
-      case j: Incomplete[B] =>
-        Incomplete(asFairStream[B](i.unwrap append j.unwrap))
+    case Nil => incomplete(that)
+    case One(a) => choice(a(), that)
+    case Choice(h, t) => choice(h(), that append t())
+    case Incomplete(u) => {
+      val evalThat = that
+      evalThat match {
+        case Nil => evalThat
+        case One(b) => choice(b(), u())
+        case Choice(h, t) =>
+          choice(h(), u() append t())
+        case Incomplete(v) =>
+          incomplete(u() append v())
+      }
     }
   }
 
   def flatMap[B](f: A => FairStream[B]): FairStream[B] = this match {
     case Nil => Nil
-    case One(a) => f(a)
-    case c: Choice[A] => f(c.head) append Incomplete(c.tail flatMap f)
-    case i: Incomplete[A] => Incomplete(i.unwrap flatMap f)
+    case One(a) => f(a())
+    case Choice(h, t) => f(h()) append incomplete(t() flatMap f)
+    case Incomplete(u) => incomplete(u() flatMap f)
   }
 
   /* Default implementation.
-  def map[B](f: A => B): FairStream[B] = this flatMap { a => FairStream(f(a)) }
+  def map[B](f: A => B): FairStream[B] = this flatMap { a => one(f(a)) }
    */
 
   def map[B](f: A => B): FairStream[B] = this match {
     case Nil => Nil
-    case One(a) => One(f(a))
-    case c: Choice[A] => Choice(f(c.head), Incomplete(c.tail map f))
-    case i: Incomplete[A] => Incomplete(i.unwrap map f)
+    case One(a) => one(f(a()))
+    case Choice(h, t) => choice(f(h()), incomplete(t() map f))
+    case Incomplete(u) => incomplete(u() map f)
   }
 
   def filter(p: A => Boolean): FairStream[A] = this match {
     case Nil => Nil
-    case One(a) => if (p(a)) this else Nil
-    case c: Choice[A] => if (p(c.head))
-      Choice(c.head, c.tail filter p) else c.tail filter p
-    case i: Incomplete[A] => Incomplete(i.unwrap filter p)
+    case One(a) => if (p(a())) this else Nil
+    case Choice(h, t) => if (p(h()))
+      choice(h(), t() filter p) else t() filter p
+    case Incomplete(u) => incomplete(u() filter p)
   }
 
   def withFilter(p: A => Boolean): FairStreamWithFilter =
@@ -61,10 +63,10 @@ abstract class FairStream[+A] {
     def map[B](f: A => B): FairStream[B] = {
       def loop(coll: FairStream[A]): FairStream[B] = coll match {
         case Nil => Nil
-        case One(a) => if (p(a)) One(f(a)) else Nil
-        case c: Choice[A] => if (p(c.head))
-          Choice(f(c.head), loop(c.tail)) else loop(c.tail)
-        case i: Incomplete[A] => Incomplete(loop(i.unwrap))
+        case One(a) => if (p(a())) one(f(a())) else Nil
+        case Choice(h, t) => if (p(h()))
+          choice(f(h()), loop(t())) else loop(t())
+        case Incomplete(u) => incomplete(loop(u()))
       }
 
       loop(FairStream.this)
@@ -73,10 +75,10 @@ abstract class FairStream[+A] {
     def flatMap[B](f: A => FairStream[B]): FairStream[B] = {
       def loop(coll: FairStream[A]): FairStream[B] = coll match {
         case Nil => Nil
-        case One(a) => if (p(a)) f(a) else Nil
-        case c: Choice[A] => if (p(c.head))
-          f(c.head) append Incomplete(loop(c.tail)) else Nil
-        case i: Incomplete[A] => Incomplete(loop(i.unwrap))
+        case One(a) => if (p(a())) f(a()) else Nil
+        case Choice(h, t) => if (p(h()))
+          f(h()) append incomplete(loop(t())) else Nil
+        case Incomplete(u) => incomplete(loop(u()))
       }
 
       loop(FairStream.this)
@@ -85,50 +87,51 @@ abstract class FairStream[+A] {
 
   def toStream: Stream[A] = this match {
     case Nil => Stream.empty
-    case One(a) => Stream(a)
-    case c: Choice[A] => c.head #:: c.tail.toStream
-    case i: Incomplete[A] => i.unwrap.toStream
+    case One(a) => Stream(a())
+    case Choice(h, t) => h() #:: t().toStream
+    case Incomplete(u) => u().toStream
   }
 
   def toList: List[A] = this match {
     case Nil => scala.collection.immutable.Nil
-    case One(a) => List(a)
-    case c: Choice[A] => c.head :: c.tail.toList
-    case i: Incomplete[A] => i.unwrap.toList
+    case One(a) => List(a())
+    case Choice(h, t) => h() :: t().toList
+    case Incomplete(u) => u().toList
   }
 }
 
-case object Nil extends FairStream[Nothing]
+final case object Nil extends FairStream[Nothing]
 
-final case class One[+A](a: A) extends FairStream[A]
+final case class One[+A](aFunc: () => A) extends FairStream[A]
 
 /** Lazy cons cell. */
-final class Choice[+A](val head: A, tailThunk: => FairStream[A])
-    extends FairStream[A] {
-  lazy val tail = tailThunk
-}
+final case class Choice[+A](headFunc: () => A, tailFunc: () => FairStream[A])
+    extends FairStream[A]
 
-object Choice {
-  def apply[A](head: A, tailThunk: => FairStream[A]) =
-    new Choice(head, tailThunk)
-}
-
-final class Incomplete[+A](unwrapThunk: => FairStream[A])
-    extends FairStream[A] {
-  lazy val unwrap = unwrapThunk
-}
-
-object Incomplete {
-  def apply[A](unwrapThunk: => FairStream[A]) = new Incomplete(unwrapThunk)
-}
+final case class Incomplete[+A](unwrapFunc: () => FairStream[A])
+    extends FairStream[A]
 
 object FairStream {
   def empty[A]: FairStream[A] = Nil
 
-  def apply[A](a: A): FairStream[A] = {
-    One(a)
+  def one[A](aThunk: => A): FairStream[A] = {
+    lazy val a = aThunk
+    One(() => a)
+  }
+
+  /** Smart constructor for laziness. */
+  def choice[A](headThunk: => A, tailThunk: => FairStream[A]) = {
+    lazy val head = headThunk
+    lazy val tail = tailThunk
+    new Choice(() => head, () => tail)
+  }
+
+  /** Smart constructor for laziness. */
+  def incomplete[A](unwrapThunk: => FairStream[A]) = {
+    lazy val unwrap = unwrapThunk
+    new Incomplete(() => unwrap)
   }
 
   def guard(b: => Boolean): FairStream[Unit] =
-    if (b) apply(()) else empty
+    if (b) one(()) else empty
 }

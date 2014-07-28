@@ -11,14 +11,34 @@ One frustration I had when writing this code was not being able to use an extend
 ``` scala
   def map[B](f: A => B): FairStream[B] = this match {
     case Nil => Nil
-    case One(a) => One(f(a))
-    case c: Choice[A] => Choice(f(c.head), Incomplete(c.tail map f))
-    case i: Incomplete[A] => Incomplete(i.unwrap map f)
+    case One(a) => one(f(a()))
+    case Choice(h, t) => choice(f(h()), incomplete(t() map f))
+    case Incomplete(u) => incomplete(u() map f)
   }
 ```
 
-where I could not use a case class and pattern matching for my classes `Choice` and `Incomplete` that take a call-by-name parameter.
+where I follow a pattern to enable laziness.
 
-With a level of indirection, by creating an explicit lazy cell, I could get pattern matching but then have to manually force it as well, so I'm thinking about different possible syntax extensions for Scala that could be helpful in minimizing the boilerplate. Scala's `lazy` construct is limited because it hides the underlying suspension.
+The case classes are defined using explicit functions as parameters, for use with pattern matching:
+
+``` scala
+final case class Choice[+A](headFunc: () => A, tailFunc: () => FairStream[A])
+    extends FairStream[A]
+```
+
+But by convention, construction must be done with "smart constructors":
+
+``` scala
+  def choice[A](headThunk: => A, tailThunk: => FairStream[A]) = {
+    lazy val head = headThunk
+    lazy val tail = tailThunk
+    new Choice(() => head, () => tail)
+  }
+
+```
+
+### Macros?
+
+I'm thinking about different possible syntax extensions for Scala that could be helpful in minimizing the boilerplate.
 
 For reference, discussions of language syntax extensions for laziness are in the 1998 paper by Wadler, Taha, and MacQueen, ["How to add laziness to a strict language, without even being odd"](http://homepages.inf.ed.ac.uk/wadler/topics/language-design.html).
