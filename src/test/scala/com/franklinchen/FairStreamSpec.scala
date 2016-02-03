@@ -2,34 +2,33 @@ package com.franklinchen
 
 import org.specs2._
 
+import cats._
+import cats.std.all._
+
+import FairStream._
+
 class FairStreamSpec extends Specification { def is = s2"""
-  Pythagorean triples $e1
+  ${`Pythagorean triples`}
   """
 
-  def e1 = {
-    val pythagoreanTriples = {
-      import FairStream._
+  def `Pythagorean triples` = {
+    /**
+      Infinite fair stream of natural numbers.
+      */
+    lazy val number: FairStream[Int] =
+      FairStream(0).concat(
+        FairStream.wait(Later(number flatMap { i => FairStream(i+1) }))
+      )
 
-      lazy val number: FairStream[Int] =
-        one(0) append (number flatMap { i => one(i+1) })
+    val triples = for {
+      i <- number; () <- guard(i > 0)
+      j <- number; () <- guard(j > 0)
+      k <- number; () <- guard(k > 0)
 
-      for {
-        i <- number
-        () <- guard(i < 10)
-      } yield (i, i, i)
+      () <- guard(i*i + j*j == k*k)
+    } yield (i, j, k)
 
-      for {
-        i <- number
-        () <- guard(i > 0)
-        j <- number
-        () <- guard (j > 0)
-        k <- number
-        () <- guard(k > 0)
-        () <- guard(i*i + j*j == k*k)
-      } yield (i, j, k)
-    }
-
-    pythagoreanTriples.toStream.take(7) === Seq(
+    triples.toStream.take(7) ==== Stream(
       (3,4,5),
       (4,3,5),
       (6,8,10),

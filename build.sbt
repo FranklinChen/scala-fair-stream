@@ -12,11 +12,16 @@ description := "Fair, backtracking monad for Scala"
 
 version := "1.0.0"
 
-scalaVersion := "2.11.1"
+scalaVersion := "2.11.7"
 
-scalacOptions += "-deprecation"
+scalacOptions ++= Seq(
+  "-unchecked",
+  "-deprecation",
+  "-feature"
+)
 
 libraryDependencies ++= Seq(
-  "org.scalacheck" %% "scalacheck" % "1.11.4" % "test",
-  "org.specs2" %% "specs2" % "2.3.13" % "test"
+  "org.typelevel" %% "cats" % "0.4.0",
+  "org.scalacheck" %% "scalacheck" % "1.12.5" % Test,
+  "org.specs2" %% "specs2-core" % "3.7" % Test
 )

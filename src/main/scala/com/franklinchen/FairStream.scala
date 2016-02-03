@@ -1,59 +1,63 @@
 package com.franklinchen
 
+import cats._
+import cats.std.all._
+
+// TODO Verify same sequence as Haskell version.
 /**
   Fair backtracking stream.
 
   http://okmij.org/ftp/Computation/monads.html#fair-bt-stream
 
-  Basic implementation without bells and whistles such as integrating
-  into the Scala collections framework or scalaz or something.
-
-  Just enough has been provided to allow use of for-comprehensions.
+  Compare with
+  https://github.com/non/cats/blob/master/core/src/main/scala/cats/data/Streaming.scala
   */
-abstract class FairStream[+A] {
+sealed abstract class FairStream[A] {
   import FairStream._
 
-  def append[B >: A](that: => FairStream[B]): FairStream[B] = this match {
-    case Nil => incomplete(that)
-    case One(a) => choice(a(), that)
-    case Choice(h, t) => choice(h(), that append t())
-    case Incomplete(u) => {
-      val evalThat = that
-      evalThat match {
-        case Nil => evalThat
-        case One(b) => choice(b(), u())
-        case Choice(h, t) =>
-          choice(h(), u() append t())
-        case Incomplete(v) =>
-          incomplete(u() append v())
-      }
+  /**
+    Interleaving concatenation of streams.
+    */
+  def concat(that: FairStream[A]): FairStream[A] = this match {
+    case Empty() => that
+    case One(a) => Cons(a, that)
+    case Cons(a, t) => Cons(a, Wait(Later(t concat that)))
+    case Wait(next) => that match {
+      case Empty() => this
+      case One(a) => Cons(a, this)
+      case Cons(a, t) => Cons(a, Wait(next.map(_ concat t)))
+      case Wait(v) => Wait(Later(next.value concat v.value))
+        //TODO Use map2
     }
   }
 
   def flatMap[B](f: A => FairStream[B]): FairStream[B] = this match {
-    case Nil => Nil
-    case One(a) => f(a())
-    case Choice(h, t) => f(h()) append incomplete(t() flatMap f)
-    case Incomplete(u) => incomplete(u() flatMap f)
+    case Empty() => empty
+    case One(a) => f(a)
+    case Cons(a, t) => f(a).concat(Wait(Later(t flatMap f)))
+    case Wait(next) => Wait(next.map(_ flatMap f))
   }
 
-  /* Default implementation.
-  def map[B](f: A => B): FairStream[B] = this flatMap { a => one(f(a)) }
-   */
+  /** Default implementation, unused. */
+  def mapDefault[B](f: A => B): FairStream[B] =
+    this flatMap { a => FairStream(f(a)) }
 
   def map[B](f: A => B): FairStream[B] = this match {
-    case Nil => Nil
-    case One(a) => one(f(a()))
-    case Choice(h, t) => choice(f(h()), incomplete(t() map f))
-    case Incomplete(u) => incomplete(u() map f)
+    case Empty() => empty
+    case One(a) => FairStream(f(a))
+    case Cons(a, t) => Cons(f(a), Wait(Later(t map f)))
+    case Wait(next) => Wait(next.map(_ map f))
   }
 
   def filter(p: A => Boolean): FairStream[A] = this match {
-    case Nil => Nil
-    case One(a) => if (p(a())) this else Nil
-    case Choice(h, t) => if (p(h()))
-      choice(h(), t() filter p) else t() filter p
-    case Incomplete(u) => incomplete(u() filter p)
+    case Empty() => empty
+    case One(a) => if (p(a)) this else empty
+    case Cons(a, t) =>
+      if (p(a))
+        Cons(a, t filter p)
+      else
+        t filter p
+    case Wait(next) => Wait(next.map(_ filter p))
   }
 
   def withFilter(p: A => Boolean): FairStreamWithFilter =
@@ -62,11 +66,14 @@ abstract class FairStream[+A] {
   final class FairStreamWithFilter(p: A => Boolean) {
     def map[B](f: A => B): FairStream[B] = {
       def loop(coll: FairStream[A]): FairStream[B] = coll match {
-        case Nil => Nil
-        case One(a) => if (p(a())) one(f(a())) else Nil
-        case Choice(h, t) => if (p(h()))
-          choice(f(h()), loop(t())) else loop(t())
-        case Incomplete(u) => incomplete(loop(u()))
+        case Empty() => empty
+        case One(a) => if (p(a)) FairStream(f(a)) else empty
+        case Cons(a, t) =>
+          if (p(a))
+            Cons(f(a), loop(t))
+          else
+            loop(t)
+        case Wait(next) => Wait(next.map(loop))
       }
 
       loop(FairStream.this)
@@ -74,64 +81,82 @@ abstract class FairStream[+A] {
 
     def flatMap[B](f: A => FairStream[B]): FairStream[B] = {
       def loop(coll: FairStream[A]): FairStream[B] = coll match {
-        case Nil => Nil
-        case One(a) => if (p(a())) f(a()) else Nil
-        case Choice(h, t) => if (p(h()))
-          f(h()) append incomplete(loop(t())) else Nil
-        case Incomplete(u) => incomplete(loop(u()))
+        case Empty() => empty
+        case One(a) => if (p(a)) f(a) else empty
+        case Cons(a, t) =>
+          if (p(a))
+            f(a) concat Wait(Later(loop(t)))
+          else
+            empty
+        case Wait(next) => Wait(next.map(loop))
       }
 
       loop(FairStream.this)
     }
   }
 
+  // TODO use foldRight
   def toStream: Stream[A] = this match {
-    case Nil => Stream.empty
-    case One(a) => Stream(a())
-    case Choice(h, t) => h() #:: t().toStream
-    case Incomplete(u) => u().toStream
+    case Empty() => Stream.empty
+    case One(a) => Stream(a)
+    case Cons(a, t) => a #:: t.toStream
+    case Wait(next) => next.value.toStream
   }
 
+  // TODO use foldRight
   def toList: List[A] = this match {
-    case Nil => scala.collection.immutable.Nil
-    case One(a) => List(a())
-    case Choice(h, t) => h() :: t().toList
-    case Incomplete(u) => u().toList
+    case Empty() => Nil
+    case One(a) => List(a)
+    case Cons(a, t) => a :: t.toList
+    case Wait(next) => next.value.toList
   }
 }
 
-final case object Nil extends FairStream[Nothing]
+trait FairStreamInstances {
+  //TODO
+  // Eq[FairStream[A]]
 
-final case class One[+A](aFunc: () => A) extends FairStream[A]
+  // Show[FairStream[A]]
 
-/** Lazy cons cell. */
-final case class Choice[+A](headFunc: () => A, tailFunc: () => FairStream[A])
-    extends FairStream[A]
+  // Foldable[FairStream]
 
-final case class Incomplete[+A](unwrapFunc: () => FairStream[A])
-    extends FairStream[A]
+  implicit object fairStreamMonad extends Monad[FairStream] {
+    override def map[A, B](as: FairStream[A])(f: A => B): FairStream[B] =
+      as.map(f)
 
-object FairStream {
-  def empty[A]: FairStream[A] = Nil
+    def pure[A](a: A): FairStream[A] =
+      FairStream(a)
 
-  def one[A](aThunk: => A): FairStream[A] = {
-    lazy val a = aThunk
-    One(() => a)
+    def flatMap[A, B](as: FairStream[A])(f: A => FairStream[B]) : FairStream[B] =
+      as.flatMap(f)
   }
+}
 
-  /** Smart constructor for laziness. */
-  def choice[A](headThunk: => A, tailThunk: => FairStream[A]) = {
-    lazy val head = headThunk
-    lazy val tail = tailThunk
-    new Choice(() => head, () => tail)
-  }
+/** The lowercase smart constructors are all by-name. */
+object FairStream extends FairStreamInstances {
+  /** Instead of case object because that requires covariance. */
+  final case class Empty[A]() extends FairStream[A]
 
-  /** Smart constructor for laziness. */
-  def incomplete[A](unwrapThunk: => FairStream[A]) = {
-    lazy val unwrap = unwrapThunk
-    new Incomplete(() => unwrap)
-  }
+  final case class One[A](a: A) extends FairStream[A]
 
-  def guard(b: => Boolean): FairStream[Unit] =
-    if (b) one(()) else empty
+  final case class Cons[A](a: A, tail: FairStream[A])
+      extends FairStream[A]
+
+  final case class Wait[A](next: Eval[FairStream[A]])
+      extends FairStream[A]
+
+  def empty[A]: FairStream[A] =
+    Empty()
+
+  def apply[A](a: A): FairStream[A] =
+    One(a)
+
+  def cons[A](a: A, s: FairStream[A]): FairStream[A] =
+    Cons(a, s)
+
+  def wait[A](ls: Eval[FairStream[A]]): FairStream[A] =
+    Wait(ls)
+
+  def guard(condition: => Boolean): FairStream[Unit] =
+    if (condition) FairStream(()) else empty
 }
