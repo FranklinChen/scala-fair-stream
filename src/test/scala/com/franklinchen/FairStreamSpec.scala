@@ -3,7 +3,6 @@ package com.franklinchen
 import org.specs2._
 
 import cats._
-import cats.std.all._
 
 import FairStream._
 
