@@ -123,8 +123,8 @@ sealed abstract class FairStream[A] {
 
 trait FairStreamInstances {
   //TODO more instances for standard Scala and for Cats.
-  implicit val instancesForFairStream: TraverseFilter[FairStream] with MonadCombine[FairStream] with Monad[FairStream] with RecursiveTailRecM[FairStream] =
-    new TraverseFilter[FairStream] with MonadCombine[FairStream] with Monad[FairStream] with RecursiveTailRecM[FairStream] {
+  implicit val instancesForFairStream: TraverseFilter[FairStream] with MonadCombine[FairStream] with Monad[FairStream] =
+    new TraverseFilter[FairStream] with MonadCombine[FairStream] with Monad[FairStream] {
       import scala.language.higherKinds
 
       def empty[A]: FairStream[A] = FairStream.Empty()
@@ -153,8 +153,8 @@ trait FairStreamInstances {
           G.map2Eval(f(a), lgsb)((ob, s) => ob.fold(s)(FairStream.cons(_, s)))
         }.value
 
-      // TODO Fix this to be stack-safe.
-      override def tailRecM[A, B](a: A)(f: A => FairStream[Either[A, B]]): FairStream[B] = defaultTailRecM(a)(f)
+      /** TODO Implement. */
+      override def tailRecM[A, B](a: A)(f: A => FairStream[Either[A, B]]): FairStream[B] = ???
     }
 }
 
