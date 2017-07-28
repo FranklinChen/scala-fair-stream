@@ -27,17 +27,18 @@ sealed abstract class FairStream[A] {
   /**
     Interleaving concatenation of streams.
     */
- final def concat(that: FairStream[A]): FairStream[A] = this match {
+  final def concat(that: FairStream[A]): FairStream[A] = this match {
     case Empty() => that
     case One(a) => Cons(a, that)
     case Cons(a, t) => Cons(a, Wait(Later(t concat that)))
-    case Wait(next) => that match {
-      case Empty() => this
-      case One(a) => Cons(a, this)
-      case Cons(a, t) => Cons(a, Wait(next.map(_ concat t)))
-      case Wait(v) => Wait(Later(next.value concat v.value))
+    case Wait(next) =>
+      that match {
+        case Empty() => this
+        case One(a) => Cons(a, this)
+        case Cons(a, t) => Cons(a, Wait(next.map(_ concat t)))
+        case Wait(v) => Wait(Later(next.value concat v.value))
         //TODO Use map2
-    }
+      }
   }
 
   /** For for-comprehensions. */
@@ -73,6 +74,7 @@ sealed abstract class FairStream[A] {
     new FairStreamWithFilter(p)
 
   final class FairStreamWithFilter(p: A => Boolean) {
+
     /** For for-comprehensions. */
     final def map[B](f: A => B): FairStream[B] = {
       def loop(coll: FairStream[A]): FairStream[B] = coll match {
@@ -123,8 +125,11 @@ sealed abstract class FairStream[A] {
 
 trait FairStreamInstances {
   //TODO more instances for standard Scala and for Cats.
-  implicit val instancesForFairStream: TraverseFilter[FairStream] with MonadCombine[FairStream] with Monad[FairStream] =
-    new TraverseFilter[FairStream] with MonadCombine[FairStream] with Monad[FairStream] {
+  implicit val instancesForFairStream
+    : TraverseFilter[FairStream] with MonadCombine[FairStream] with Monad[
+      FairStream] =
+    new TraverseFilter[FairStream] with MonadCombine[FairStream]
+    with Monad[FairStream] {
       import scala.language.higherKinds
 
       def empty[A]: FairStream[A] = FairStream.Empty()
@@ -137,32 +142,39 @@ trait FairStreamInstances {
       override def map[A, B](fa: FairStream[A])(f: A => B): FairStream[B] =
         fa.map(f)
 
-      override def flatMap[A, B](fa: FairStream[A])(f: A => FairStream[B]) : FairStream[B] =
+      override def flatMap[A, B](fa: FairStream[A])(
+          f: A => FairStream[B]): FairStream[B] =
         fa.flatMap(f)
 
-      def foldLeft[A, B](fa: FairStream[A],b: B)(f: (B, A) => B): B =
+      def foldLeft[A, B](fa: FairStream[A], b: B)(f: (B, A) => B): B =
         fa.foldLeft(b)(f)
 
-      def foldRight[A, B](fa: FairStream[A],lb: Eval[B])(f: (A, Eval[B]) => Eval[B]): Eval[B] =
+      def foldRight[A, B](fa: FairStream[A], lb: Eval[B])(
+          f: (A, Eval[B]) => Eval[B]): Eval[B] =
         Now(fa).flatMap { s =>
-          if (s.isEmpty) lb else f(s.head, Eval.defer(foldRight(s.tail, lb)(f)))
+          if (s.isEmpty) lb
+          else f(s.head, Eval.defer(foldRight(s.tail, lb)(f)))
         }
 
-      def traverseFilter[G[_], A, B](fa: FairStream[A])(f: A => G[Option[B]])(implicit G: Applicative[G]): G[FairStream[B]] =
-        foldRight(fa, Always(G.pure(FairStream.empty[B]))){ (a, lgsb) =>
+      def traverseFilter[G[_], A, B](fa: FairStream[A])(f: A => G[Option[B]])(
+          implicit G: Applicative[G]): G[FairStream[B]] =
+        foldRight(fa, Always(G.pure(FairStream.empty[B]))) { (a, lgsb) =>
           G.map2Eval(f(a), lgsb)((ob, s) => ob.fold(s)(FairStream.cons(_, s)))
         }.value
 
       /** TODO Implement. */
-      override def tailRecM[A, B](a: A)(f: A => FairStream[Either[A, B]]): FairStream[B] = ???
+      override def tailRecM[A, B](a: A)(
+          f: A => FairStream[Either[A, B]]): FairStream[B] = ???
     }
 }
 
 object FairStream extends FairStreamInstances {
+
   /** Instead of case object because that requires covariance. */
   final case class Empty[A]() extends FairStream[A] {
     def head: A = throw new NoSuchElementException("head of empty fair stream")
-    def tail: FairStream[A] = throw new UnsupportedOperationException("tail of empty fair stream")
+    def tail: FairStream[A] =
+      throw new UnsupportedOperationException("tail of empty fair stream")
   }
 
   final case class One[A](head: A) extends FairStream[A] {

@@ -12,7 +12,7 @@ description := "Fair, backtracking monad for Scala"
 
 version := "1.0.0"
 
-scalaVersion := "2.12.2"
+scalaVersion := "2.12.3"
 
 scalacOptions ++= Seq(
   "-unchecked",
