@@ -1,4 +1,5 @@
 sudo: false
+dist: trusty
 language: scala
 cache:
   directories:
@@ -7,6 +8,7 @@ cache:
 scala:
   - 2.12.3
 jdk:
+  - openjdk8
   - oraclejdk8
 script:
   - sbt ++$TRAVIS_SCALA_VERSION clean coverage test coverageReport

@@ -18,6 +18,11 @@ sealed abstract class FairStream[A] {
 
   def tail: FairStream[A]
 
+  final def isEmpty(): Boolean = this match {
+    case Empty() => true
+    case _ => false
+  }
+
   @tailrec
   final def foldLeft[B](z: B)(op: (B, A) => B): B = {
     if (this.isEmpty) z
@@ -125,19 +130,9 @@ sealed abstract class FairStream[A] {
 
 trait FairStreamInstances {
   //TODO more instances for standard Scala and for Cats.
-  implicit val instancesForFairStream
-    : TraverseFilter[FairStream] with MonadCombine[FairStream] with Monad[
-      FairStream] =
-    new TraverseFilter[FairStream] with MonadCombine[FairStream]
-    with Monad[FairStream] {
-      import scala.language.higherKinds
-
-      def empty[A]: FairStream[A] = FairStream.Empty()
-
-      def combineK[A](x: FairStream[A], y: FairStream[A]): FairStream[A] =
-        x concat y
-
-      def pure[A](a: A): FairStream[A] = FairStream(a)
+  implicit val instancesForFairStream: Monad[FairStream] =
+    new Monad[FairStream] {
+      override def pure[A](a: A): FairStream[A] = FairStream(a)
 
       override def map[A, B](fa: FairStream[A])(f: A => B): FairStream[B] =
         fa.map(f)
@@ -145,22 +140,6 @@ trait FairStreamInstances {
       override def flatMap[A, B](fa: FairStream[A])(
           f: A => FairStream[B]): FairStream[B] =
         fa.flatMap(f)
-
-      def foldLeft[A, B](fa: FairStream[A], b: B)(f: (B, A) => B): B =
-        fa.foldLeft(b)(f)
-
-      def foldRight[A, B](fa: FairStream[A], lb: Eval[B])(
-          f: (A, Eval[B]) => Eval[B]): Eval[B] =
-        Now(fa).flatMap { s =>
-          if (s.isEmpty) lb
-          else f(s.head, Eval.defer(foldRight(s.tail, lb)(f)))
-        }
-
-      def traverseFilter[G[_], A, B](fa: FairStream[A])(f: A => G[Option[B]])(
-          implicit G: Applicative[G]): G[FairStream[B]] =
-        foldRight(fa, Always(G.pure(FairStream.empty[B]))) { (a, lgsb) =>
-          G.map2Eval(f(a), lgsb)((ob, s) => ob.fold(s)(FairStream.cons(_, s)))
-        }.value
 
       /** TODO Implement. */
       override def tailRecM[A, B](a: A)(
