@@ -12,15 +12,16 @@ description := "Fair, backtracking monad for Scala"
 
 version := "1.0.0"
 
-scalaVersion := "2.12.3"
+scalaVersion := "2.12.4"
 
 scalacOptions ++= Seq(
   "-unchecked",
   "-deprecation",
-  "-feature"
+  "-feature",
+  "-Ypartial-unification"
 )
 
 libraryDependencies ++= Seq(
-  "org.typelevel" %% "cats-core" % "1.0.0-MF",
-  "org.specs2" %% "specs2-core" % "3.9.4" % Test
+  "org.typelevel" %% "cats-core" % "1.0.0-RC1",
+  "org.specs2" %% "specs2-core" % "4.0.1" % Test
 )
