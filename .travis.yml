@@ -8,7 +8,6 @@ cache:
 scala:
   - 2.12.4
 jdk:
-  - oraclejdk9
   - openjdk8
   - oraclejdk8
 script:
