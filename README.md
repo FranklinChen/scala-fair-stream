@@ -1,6 +1,6 @@
 # Fair backtracking stream monad, in Scala
 
-[![Build Status](https://travis-ci.org/FranklinChen/scala-fair-stream.png)](https://travis-ci.org/FranklinChen/scala-fair-stream)
+[![Build Status](https://travis-ci.org/FranklinChen/scala-fair-stream.svg)](https://travis-ci.org/FranklinChen/scala-fair-stream)
 
 Code translated from [Oleg's original Haskell](http://okmij.org/ftp/Computation/monads.html#fair-bt-stream), but without being as fully lazy, for now.
 
