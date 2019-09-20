@@ -1,4 +1,3 @@
-dist: xenial
 language: scala
 cache:
   directories:
@@ -13,21 +12,17 @@ matrix:
     - os: linux
       jdk: openjdk-ea
     - os: linux
-      jdk: openjdk11
+      jdk: openjdk13
     - os: linux
-      jdk: openjdk10
-    - os: linux
-      jdk: openjdk9
-    - os: osx
       jdk: openjdk11
     - os: osx
-      jdk: openjdk10
+      jdk: openjdk13
     - os: osx
-      jdk: openjdk9
+      jdk: openjdk11
   allow_failures:
     - jdk: openjdk-ea
 scala:
-  - 2.12.8
+  - 2.13.1
 script:
   - sbt ++$TRAVIS_SCALA_VERSION clean test
   - find $HOME/.sbt -name "*.lock" | xargs rm
