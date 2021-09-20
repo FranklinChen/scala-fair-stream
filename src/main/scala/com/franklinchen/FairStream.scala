@@ -25,7 +25,7 @@ sealed abstract class FairStream[A] {
 
   @tailrec
   final def foldLeft[B](z: B)(op: (B, A) => B): B = {
-    if (this.isEmpty) z
+    if (this.isEmpty()) z
     else tail.foldLeft(op(z, head))(op)
   }
 
@@ -113,11 +113,11 @@ sealed abstract class FairStream[A] {
     }
   }
 
-  def toStream: Stream[A] = this match {
-    case Empty() => Stream.empty
-    case One(a) => Stream(a)
-    case Cons(a, t) => a #:: t.toStream
-    case Wait(next) => next.value.toStream
+  def toLazyList: LazyList[A] = this match {
+    case Empty() => LazyList.empty
+    case One(a) => LazyList(a)
+    case Cons(a, t) => a #:: t.toLazyList
+    case Wait(next) => next.value.toLazyList
   }
 
   def toList: List[A] = this match {

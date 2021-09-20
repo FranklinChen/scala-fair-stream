@@ -31,7 +31,7 @@ class FairStreamSpec extends Specification {
       () <- guard(i * i + j * j == k * k)
     } yield (i, j, k)
 
-    triples.toStream.take(7) ==== Stream(
+    triples.toLazyList.take(7).toList === List(
       (3, 4, 5),
       (4, 3, 5),
       (6, 8, 10),
