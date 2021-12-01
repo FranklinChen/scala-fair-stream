@@ -1,4 +1,4 @@
-ThisBuild / scalaVersion := "3.0.2"
+ThisBuild / scalaVersion := "3.1.0"
 ThisBuild / githubWorkflowPublishTargetBranches := Seq()
 
 lazy val root = (project in file("."))
@@ -10,7 +10,7 @@ lazy val root = (project in file("."))
     startYear := Some(2013),
     description := "Fair, backtracking monad for Scala",
     version := "1.0.0",
-    crossScalaVersions := List("2.12.15", "2.13.6", "3.0.2"),
+    crossScalaVersions := List("2.12.15", "2.13.7", "3.1.0"),
     scalacOptions ++= Seq(
       "-deprecation",
       "-feature"
