@@ -35,13 +35,13 @@ sealed abstract class FairStream[+A] {
   final def concat[B >: A](that: FairStream[B]): FairStream[B] = this match {
     case Empty => that
     case One(a) => Cons(a, that)
-    case Cons(a, t) => Cons(a, Wait(Later(t concat that)))
+    case Cons(a, t) => Cons(a, Wait(Later(t.concat(that))))
     case Wait(next) =>
       that match {
         case Empty => this
         case One(a) => Cons(a, this)
-        case Cons(a, t) => Cons(a, Wait(next.map(_ concat t)))
-        case Wait(v) => Wait(Later(next.value concat v.value))
+        case Cons(a, t) => Cons(a, Wait(next.map(_.concat(t))))
+        case Wait(v) => Wait(Later(next.value.concat(v.value)))
         //TODO Use map2
       }
   }
@@ -50,16 +50,16 @@ sealed abstract class FairStream[+A] {
   final def flatMap[B](f: A => FairStream[B]): FairStream[B] = this match {
     case Empty => Empty
     case One(a) => f(a)
-    case Cons(a, t) => f(a).concat(Wait(Later(t flatMap f)))
-    case Wait(next) => Wait(next.map(_ flatMap f))
+    case Cons(a, t) => f(a).concat(Wait(Later(t.flatMap(f))))
+    case Wait(next) => Wait(next.map(_.flatMap(f)))
   }
 
   /** For for-comprehensions. */
   final def map[B](f: A => B): FairStream[B] = this match {
     case Empty => Empty
     case One(a) => FairStream(f(a))
-    case Cons(a, t) => Cons(f(a), Wait(Later(t map f)))
-    case Wait(next) => Wait(next.map(_ map f))
+    case Cons(a, t) => Cons(f(a), Wait(Later(t.map(f))))
+    case Wait(next) => Wait(next.map(_.map(f)))
   }
 
   /** For for-comprehensions. */
@@ -68,10 +68,10 @@ sealed abstract class FairStream[+A] {
     case One(a) => if (p(a)) this else Empty
     case Cons(a, t) =>
       if (p(a))
-        Cons(a, t filter p)
+        Cons(a, t.filter(p))
       else
-        t filter p
-    case Wait(next) => Wait(next.map(_ filter p))
+        t.filter(p)
+    case Wait(next) => Wait(next.map(_.filter(p)))
   }
 
   /** For for-comprehensions. */
@@ -103,7 +103,7 @@ sealed abstract class FairStream[+A] {
         case One(a) => if (p(a)) f(a) else Empty
         case Cons(a, t) =>
           if (p(a))
-            f(a) concat Wait(Later(loop(t)))
+            f(a).concat(Wait(Later(loop(t))))
           else
             Empty
         case Wait(next) => Wait(next.map(loop))
